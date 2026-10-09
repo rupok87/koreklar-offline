@@ -280,7 +280,7 @@ async function renderPage(moduleId, chapterId, pageIndex) {
   `);
 
   if (imgPath) mountImage('pageImage', imgPath);
-  if (audioPath) mountAudio('pageAudio', audioPath, false);
+  if (audioPath) mountAudio('pageAudio', audioPath, true);
 
   document.getElementById('prevBtn').onclick = () => navigate(`#/lessons/m/${moduleId}/c/${chapterId}/p/${pageIndex - 1}`);
   document.getElementById('nextBtn').onclick = () => navigate(`#/lessons/m/${moduleId}/c/${chapterId}/p/${pageIndex + 1}`);
@@ -514,8 +514,7 @@ async function renderTestResult(attemptIdStr) {
       const wasSelected = selectedIndices.has(index);
       let cls = 'answer';
       let marker = '';
-      if (isCorrectChoice && wasSelected) { cls += ' correct'; marker = 'correct - you picked this'; }
-      else if (isCorrectChoice && !wasSelected) { cls += ' correct'; marker = 'correct - you missed this'; }
+      if (isCorrectChoice && wasSelected) { cls += ' correct'; marker = 'correct'; }
       else if (wasSelected && !isCorrectChoice) { cls += ' incorrect'; marker = 'your answer - incorrect'; }
       return `<div class="${cls}">
         <span class="label">${escapeHtml(text)}</span>
@@ -523,9 +522,12 @@ async function renderTestResult(attemptIdStr) {
       </div>`;
     }).join('');
 
+    const imgPath = imageAssetPath(q.image);
+
     return `<div class="card" style="cursor:default">
       <h2>Question ${qIndex + 1}</h2>
       <div class="question-text">${q.question || ''}</div>
+      ${imgPath ? `<div id="resultImage-${qIndex}" style="margin-top:8px"></div>` : ''}
       <div style="margin-top:8px">${answersHtml}</div>
       <p class="badge ${qa.isCorrect ? 'pass' : 'fail'}" style="margin-top:8px">${qa.isCorrect ? 'Correct' : 'Incorrect'}</p>
     </div>`;
@@ -540,6 +542,12 @@ async function renderTestResult(attemptIdStr) {
     ` : ''}
     <div style="margin-top:16px">${cards}</div>
   `);
+
+  questionAttempts.forEach((qa, qIndex) => {
+    const q = content.questions[qa.questionId];
+    const imgPath = q && imageAssetPath(q.image);
+    if (imgPath) mountImage(`resultImage-${qIndex}`, imgPath);
+  });
 }
 
 /* ---------- Progress / Stats ---------- */

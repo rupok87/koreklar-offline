@@ -530,7 +530,6 @@ async function renderTestResult(attemptIdStr) {
       <div class="question-text">${q.question || ''}</div>
       ${imgPath ? `<div id="resultImage-${qIndex}" style="margin-top:8px"></div>` : ''}
       <div style="margin-top:8px">${answersHtml}</div>
-      <p class="badge ${qa.isCorrect ? 'pass' : 'fail'}" style="margin-top:8px">${qa.isCorrect ? 'Correct' : 'Incorrect'}</p>
     </div>`;
   }).join('');
 

@@ -517,7 +517,7 @@ async function renderTestResult(attemptIdStr) {
       if (isCorrectChoice && wasSelected) { cls += ' correct'; marker = 'correct'; }
       else if (wasSelected && !isCorrectChoice) { cls += ' incorrect'; marker = 'your answer - incorrect'; }
       return `<div class="${cls}">
-        <span class="label">${escapeHtml(text)}</span>
+        <span class="label">${index + 1}. ${escapeHtml(text)}</span>
         ${marker ? `<span class="marker">${marker}</span>` : ''}
         ${isCorrectChoice && !wasSelected ? '<span class="missed-tick">&#10003;</span>' : ''}
       </div>`;

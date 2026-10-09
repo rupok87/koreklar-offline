@@ -141,6 +141,13 @@ button.action.secondary { background: #E3E5E9; color: var(--text); }
 .answer.incorrect .label { color: var(--incorrect); font-weight: 700; }
 .answer .marker { font-size: 12px; font-weight: 600; }
 
+.missed-tick {
+  color: var(--correct);
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 .question-text, .page-text { font-size: 16px; line-height: 1.45; }
 .question-text p, .page-text p { margin: 0 0 10px; }
 

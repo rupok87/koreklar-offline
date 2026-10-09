@@ -519,6 +519,7 @@ async function renderTestResult(attemptIdStr) {
       return `<div class="${cls}">
         <span class="label">${escapeHtml(text)}</span>
         ${marker ? `<span class="marker">${marker}</span>` : ''}
+        ${isCorrectChoice && !wasSelected ? '<span class="missed-tick">&#10003;</span>' : ''}
       </div>`;
     }).join('');
 

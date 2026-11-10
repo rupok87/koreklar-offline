@@ -90,6 +90,40 @@ function totalPageCount() {
   return content.education.reduce((sum, m) => sum + m.children.reduce((s, c) => s + c.pages.length, 0), 0);
 }
 
+/** Strips a question's trailing sequence number off its title/code, e.g. "B1.7.18.003" -> "B1.7.18",
+ * "500038" -> "500", "B3121002P" -> "B3121". These are koreklar.dk's own curriculum codes, where the
+ * same topic prefix is reused across several photo/wording variants of the same scenario. */
+function topicCode(title) {
+  let t = (title || '').trim();
+  if (!t) return t;
+  if (t.endsWith('P')) t = t.slice(0, -1);
+  if (t.includes('.')) {
+    const parts = t.split('.');
+    return parts.length > 1 ? parts.slice(0, -1).join('.') : t;
+  }
+  if (t.length > 3 && /^\d{3}$/.test(t.slice(-3))) return t.slice(0, -3);
+  return t;
+}
+
+let questionGroupsCache = null;
+function getQuestionGroups() {
+  if (questionGroupsCache) return questionGroupsCache;
+  const byCode = {};
+  Object.values(content.questions).forEach((q) => {
+    const code = topicCode(q.title);
+    (byCode[code] = byCode[code] || []).push(q);
+  });
+  const similar = Object.entries(byCode)
+    .filter(([, qs]) => qs.length > 1)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  const other = Object.entries(byCode)
+    .filter(([, qs]) => qs.length === 1)
+    .flatMap(([, qs]) => qs)
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  questionGroupsCache = { similar, other };
+  return questionGroupsCache;
+}
+
 function clearActiveInterval() {
   if (activeIntervalId !== null) {
     clearInterval(activeIntervalId);
@@ -123,6 +157,7 @@ const DRAWER_LINKS = [
   { label: 'Lessons', hash: '#/lessons', emoji: '📖' },
   { label: 'Practice Tests', hash: '#/tests', emoji: '📝' },
   { label: 'Progress', hash: '#/stats', emoji: '📊' },
+  { label: 'Test Questions', hash: '#/question-bank', emoji: '🗂️' },
 ];
 
 function ensureDrawer() {
@@ -198,10 +233,18 @@ async function renderHome() {
         <p>Review your test history</p>
       </div>
     </div>
+    <div class="card home-card" id="goQuestionBank">
+      <div class="emoji">🗂️</div>
+      <div>
+        <h2>Test Questions</h2>
+        <p>Browse the question bank by topic</p>
+      </div>
+    </div>
   `);
   document.getElementById('goLessons').onclick = () => navigate('#/lessons');
   document.getElementById('goTests').onclick = () => navigate('#/tests');
   document.getElementById('goStats').onclick = () => navigate('#/stats');
+  document.getElementById('goQuestionBank').onclick = () => navigate('#/question-bank');
 }
 
 /* ---------- Lessons ---------- */
@@ -578,6 +621,116 @@ async function renderStats() {
   `);
 }
 
+/* ---------- Question Bank ---------- */
+
+function renderQuestionBankHome() {
+  const { similar, other } = getQuestionGroups();
+  const similarCount = similar.reduce((sum, [, qs]) => sum + qs.length, 0);
+
+  shell('Test Questions', '#/', `
+    <div class="card" id="goSimilar">
+      <h2>Similar Questions</h2>
+      <p>${similarCount} questions grouped by scenario</p>
+    </div>
+    <div class="card" id="goOther">
+      <h2>Other Questions</h2>
+      <p>${other.length} one-off questions</p>
+    </div>
+    <div class="card" id="goExplanations">
+      <h2>Answer Explanations</h2>
+      <p>Explanations from koreklar.dk</p>
+    </div>
+  `);
+  document.getElementById('goSimilar').onclick = () => navigate('#/question-bank/similar');
+  document.getElementById('goOther').onclick = () => navigate('#/question-bank/other');
+  document.getElementById('goExplanations').onclick = () => navigate('#/question-bank/explanations');
+}
+
+function renderSimilarGroups() {
+  const { similar } = getQuestionGroups();
+  const items = similar.map(([code, qs]) => `
+    <div class="card" data-code="${escapeHtml(code)}">
+      <h2>Topic ${escapeHtml(code)}</h2>
+      <p>${qs.length} similar questions</p>
+    </div>`).join('');
+
+  shell('Similar Questions', '#/question-bank', items || '<p class="center-note">No groups found.</p>');
+  document.querySelectorAll('#content .card').forEach((el) => {
+    el.onclick = () => navigate(`#/question-bank/similar/${encodeURIComponent(el.dataset.code)}`);
+  });
+}
+
+function renderGroupDetail(codeEncoded) {
+  const code = decodeURIComponent(codeEncoded);
+  const { similar } = getQuestionGroups();
+  const group = similar.find(([c]) => c === code);
+  const questions = group ? group[1] : [];
+
+  const items = questions.map((q) => `
+    <div class="card" data-id="${q.pageid}">
+      <h2>${escapeHtml(q.title)}</h2>
+      <div class="question-text">${q.question || ''}</div>
+    </div>`).join('');
+
+  shell(`Topic ${code}`, '#/question-bank/similar', items || '<p class="center-note">No questions found.</p>');
+  document.querySelectorAll('#content .card').forEach((el) => {
+    el.onclick = () => navigate(`#/question-bank/q/${el.dataset.id}`);
+  });
+}
+
+function renderOtherQuestions() {
+  const { other } = getQuestionGroups();
+  const items = other.map((q) => `
+    <div class="card" data-id="${q.pageid}">
+      <h2>${escapeHtml(q.title)}</h2>
+      <div class="question-text">${q.question || ''}</div>
+    </div>`).join('');
+
+  shell('Other Questions', '#/question-bank', items || '<p class="center-note">No questions found.</p>');
+  document.querySelectorAll('#content .card').forEach((el) => {
+    el.onclick = () => navigate(`#/question-bank/q/${el.dataset.id}`);
+  });
+}
+
+function renderQuestionDetail(questionId) {
+  const q = content.questions[questionId];
+  if (!q) {
+    shell('Question', '#/question-bank', '<p class="center-note">Question not found.</p>');
+    return;
+  }
+  const correct = correctIndices(q);
+  const imgPath = imageAssetPath(q.image);
+  const audioPath = audioAssetPath(q.audio);
+
+  const answersHtml = q.answers.map((text, index) => {
+    const isCorrect = correct.has(index);
+    return `<div class="answer${isCorrect ? ' correct' : ''}">
+      <span class="label">${index + 1}. ${escapeHtml(text)}</span>
+      ${isCorrect ? '<span class="missed-tick">&#10003;</span>' : ''}
+    </div>`;
+  }).join('');
+
+  shell(q.title || 'Question', '#/question-bank', `
+    <div class="question-text">${q.question || ''}</div>
+    ${imgPath ? '<div id="qbImage" style="margin-top:12px"></div>' : ''}
+    ${audioPath ? '<div class="audio-row" id="qbAudio" style="margin-top:12px"></div>' : ''}
+    <div style="margin-top:12px">${answersHtml}</div>
+  `);
+
+  if (imgPath) mountImage('qbImage', imgPath);
+  if (audioPath) mountAudio('qbAudio', audioPath, true);
+}
+
+function renderExplanations() {
+  shell('Answer Explanations', '#/question-bank', `
+    <p class="center-note">
+      Explanations aren't available yet. The bundled question data from koreklar.dk doesn't include
+      answer explanations — only the questions, answers, images and narration. This section is ready
+      to fill in once that text is available.
+    </p>
+  `);
+}
+
 /* ---------- Router ---------- */
 
 function route(hash) {
@@ -616,6 +769,18 @@ function route(hash) {
   }
 
   if (seg[0] === 'stats') { renderStats(); return; }
+
+  if (seg[0] === 'question-bank') {
+    if (seg.length === 1) { renderQuestionBankHome(); return; }
+    if (seg[1] === 'similar') {
+      if (seg.length === 2) { renderSimilarGroups(); return; }
+      renderGroupDetail(seg[2]);
+      return;
+    }
+    if (seg[1] === 'other') { renderOtherQuestions(); return; }
+    if (seg[1] === 'q') { renderQuestionDetail(seg[2]); return; }
+    if (seg[1] === 'explanations') { renderExplanations(); return; }
+  }
 
   renderHome();
 }
